@@ -1,0 +1,111 @@
+name: Publish Minecraft Image
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+
+  publish:
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+
+      ########################################
+      # Checkout
+      ########################################
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      ########################################
+      # Configure AWS Credentials
+      ########################################
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      ########################################
+      # Login to ECR
+      ########################################
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      ########################################
+      # Pull Minecraft Image
+      ########################################
+
+      - name: Pull upstream Minecraft image
+        run: |
+          docker pull itzg/minecraft-server:latest
+
+      ########################################
+      # Smoke Test
+      ########################################
+
+      - name: Run smoke test
+        run: |
+
+          docker run -d \
+            --name minecraft-test \
+            -e EULA=TRUE \
+            -e MEMORY=1G \
+            -p 25565:25565 \
+            itzg/minecraft-server:latest
+
+          echo "Waiting for Minecraft server startup..."
+
+          for i in $(seq 1 12); do
+
+            sleep 10
+
+            docker logs minecraft-test
+
+            if docker logs minecraft-test 2>&1 | grep -q "Done"; then
+              echo "Minecraft server started successfully"
+              exit 0
+            fi
+
+          done
+
+          echo "Smoke test failed"
+
+          docker logs minecraft-test
+
+          exit 1
+
+      ########################################
+      # Tag Image
+      ########################################
+
+      - name: Tag image
+        run: |
+
+          docker tag itzg/minecraft-server:latest \
+          381492301020.dkr.ecr.us-east-1.amazonaws.com/minecraft-server:${GITHUB_REF_NAME}
+
+          docker tag itzg/minecraft-server:latest \
+          381492301020.dkr.ecr.us-east-1.amazonaws.com/minecraft-server:latest
+
+      ########################################
+      # Push Images
+      ########################################
+
+      - name: Push image to ECR
+        run: |
+
+          docker push 381492301020.dkr.ecr.us-east-1.amazonaws.com/minecraft-server:${GITHUB_REF_NAME}
+
+          docker push 381492301020.dkr.ecr.us-east-1.amazonaws.com/minecraft-server:latest
