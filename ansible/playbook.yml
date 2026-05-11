@@ -1,0 +1,111 @@
+---
+- name: Configure Minecraft Server
+  hosts: minecraft
+  become: true
+
+  vars:
+    aws_region: "us-east-1"
+
+    ecr_repo: "381492301020.dkr.ecr.us-east-1.amazonaws.com/minecraft-server"
+
+    minecraft_image: "{{ ecr_repo }}:latest"
+
+    bucket_name: "alex-minecraft-backups-12345"
+
+    data_dir: "/data"
+
+  tasks:
+
+    ########################################
+    # Install packages
+    ########################################
+
+    - name: Install Docker
+      dnf:
+        name: docker
+        state: present
+
+    - name: Install AWS CLI
+      dnf:
+        name: awscli
+        state: present
+
+    ########################################
+    # Start Docker
+    ########################################
+
+    - name: Start Docker service
+      service:
+        name: docker
+        state: started
+        enabled: true
+
+    ########################################
+    # Install Docker SDK
+    ########################################
+
+    - name: Install pip
+      dnf:
+        name: python3-pip
+        state: present
+
+    ########################################
+    # Create data directory
+    ########################################
+
+    - name: Create Minecraft data directory
+      file:
+        path: "{{ data_dir }}"
+        state: directory
+        mode: '0755'
+
+    ########################################
+    # Restore world from S3
+    ########################################
+
+    - name: Restore world data from S3
+      shell: |
+        aws s3 sync s3://{{ bucket_name }}/world {{ data_dir }}
+      args:
+        executable: /bin/bash
+
+    ########################################
+    # Login to ECR
+    ########################################
+
+    - name: Login to ECR
+      shell: |
+        aws ecr get-login-password --region {{ aws_region }} \
+        | docker login --username AWS --password-stdin {{ ecr_repo.split('/')[0] }}
+      args:
+        executable: /bin/bash
+
+    ########################################
+    # Pull image
+    ########################################
+    - name: Pull Minecraft image
+      shell: docker pull {{ minecraft_image }}
+    
+    ########################################
+    # Stop existing container if needed
+    ########################################
+
+    - name: Remove existing Minecraft container
+      shell: |
+        docker rm -f minecraft || true
+
+    ########################################
+    # Start Minecraft container
+    ########################################
+    - name: Start Minecraft container
+      shell: |
+        docker run -d \
+          --name minecraft \
+          --restart unless-stopped \
+          -p 25565:25565 \
+          -v {{ data_dir }}:/data \
+          -e EULA=TRUE \
+          -e MEMORY=2G \
+          -e TYPE=VANILLA \
+          -e MOTD="Alex Stephen 934506588" \
+          {{ minecraft_image }}
