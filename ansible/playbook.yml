@@ -30,6 +30,11 @@
         name: awscli
         state: present
 
+    - name: Install pip
+      dnf:
+        name: python3-pip
+        state: present
+
     ########################################
     # Start Docker
     ########################################
@@ -41,15 +46,6 @@
         enabled: true
 
     ########################################
-    # Install Docker SDK
-    ########################################
-
-    - name: Install pip
-      dnf:
-        name: python3-pip
-        state: present
-
-    ########################################
     # Create data directory
     ########################################
 
@@ -57,7 +53,9 @@
       file:
         path: "{{ data_dir }}"
         state: directory
-        mode: '0755'
+        mode: '0775'
+        owner: "1000"
+        group: "1000"
 
     ########################################
     # Restore world from S3
@@ -65,9 +63,21 @@
 
     - name: Restore world data from S3
       shell: |
-        aws s3 sync s3://{{ bucket_name }}/world {{ data_dir }}
+        aws s3 sync s3://{{ bucket_name }}/world {{ data_dir }} || true
       args:
         executable: /bin/bash
+
+    ########################################
+    # Fix permissions AFTER restore
+    ########################################
+
+    - name: Fix Minecraft data permissions
+      file:
+        path: "{{ data_dir }}"
+        owner: "1000"
+        group: "1000"
+        mode: '0775'
+        recurse: yes
 
     ########################################
     # Login to ECR
@@ -83,11 +93,13 @@
     ########################################
     # Pull image
     ########################################
+
     - name: Pull Minecraft image
-      shell: docker pull {{ minecraft_image }}
-    
+      shell: |
+        docker pull {{ minecraft_image }}
+
     ########################################
-    # Stop existing container if needed
+    # Remove existing container
     ########################################
 
     - name: Remove existing Minecraft container
@@ -97,6 +109,7 @@
     ########################################
     # Start Minecraft container
     ########################################
+
     - name: Start Minecraft container
       shell: |
         docker run -d \
@@ -110,10 +123,22 @@
           -e MOTD="Alex Stephen 934506588" \
           {{ minecraft_image }}
 
-    - name: Fix Minecraft data permissions
-      file:
-        path: /data
-        owner: "1000"
-        group: "1000"
-        mode: '0775'
-        recurse: yes
+    ########################################
+    # Wait for startup
+    ########################################
+
+    - name: Wait for Minecraft startup
+      shell: |
+        sleep 45
+
+    ########################################
+    # Show Minecraft logs
+    ########################################
+
+    - name: Show Minecraft logs
+      shell: |
+        docker logs minecraft --tail 50
+      register: minecraft_logs
+
+    - debug:
+        var: minecraft_logs.stdout_lines
