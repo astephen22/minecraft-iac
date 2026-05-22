@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minecraft
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minecraft
+  template:
+    metadata:
+      labels:
+        app: minecraft
+    spec:
+      imagePullSecrets:
+        - name: ecr-secret
+      containers:
+
+      containers:
+        - name: minecraft
+          image: 381492301020.dkr.ecr.us-east-1.amazonaws.com/minecraft-server:v1.0
+          ports:
+            - containerPort: 25565
+
+          envFrom:
+            - configMapRef:
+                name: minecraft-config
+
+          volumeMounts:
+            - name: minecraft-data
+              mountPath: /data
+
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1"
+
+          ########################################
+          # PROBES (REQUIRED FOR STABILITY)
+          ########################################
+
+          startupProbe:
+            tcpSocket:
+              port: 25565
+            failureThreshold: 30
+            periodSeconds: 10
+
+          readinessProbe:
+            tcpSocket:
+              port: 25565
+            initialDelaySeconds: 60
+            periodSeconds: 10
+
+          livenessProbe:
+            tcpSocket:
+              port: 25565
+            initialDelaySeconds: 120
+            periodSeconds: 20
+
+      volumes:
+        - name: minecraft-data
+          persistentVolumeClaim:
+            claimName: minecraft-pvc

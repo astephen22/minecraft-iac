@@ -107,6 +107,51 @@
         docker rm -f minecraft || true
 
     ########################################
+    # Install k3s (Kubernetes)
+    ########################################
+
+    - name: Install k3s
+      shell: |
+        curl -sfL https://get.k3s.io | sh -
+      args:
+        executable: /bin/bash
+      register: k3s_install
+      changed_when: "'Installed' in k3s_install.stdout or k3s_install.rc == 0"
+
+    ########################################
+    # Ensure k3s is running
+    ########################################
+
+    - name: Enable and start k3s
+      systemd:
+        name: k3s
+        state: started
+        enabled: yes
+
+    ########################################
+    # Wait for k3s to be ready
+    ########################################
+
+    - name: Wait for k3s node to be ready
+      shell: |
+        kubectl get nodes
+      register: k3s_status
+      retries: 10
+      delay: 10
+      until: "'Ready' in k3s_status.stdout"
+
+    ########################################
+    # Verify k3s installation
+    ########################################
+
+    - name: Show k3s status
+      shell: systemctl status k3s
+      register: k3s_service
+
+    - debug:
+        var: k3s_service.stdout_lines
+
+    ########################################
     # Start Minecraft container
     ########################################
 
