@@ -1,0 +1,22 @@
+grafana:
+  adminPassword: admin
+  service:
+    type: ClusterIP  # keep private (important for security points)
+
+prometheus:
+  prometheusSpec:
+    retention: 6h   # cost control (REQUIRED)
+    resources:
+      requests:
+        memory: 500Mi
+      limits:
+        memory: 1Gi
+
+alertmanager:
+  enabled: true
+
+nodeExporter:
+  enabled: true
+
+kubeStateMetrics:
+  enabled: true

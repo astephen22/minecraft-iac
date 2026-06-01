@@ -1,0 +1,30 @@
+groups:
+- name: minecraft-alerts
+  rules:
+
+  - alert: MinecraftPodCrashLooping
+    expr: kube_pod_container_status_restarts_total > 3
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Minecraft pod is restarting frequently"
+      description: "Pod has restarted more than 3 times"
+
+  - alert: HighMemoryUsage
+    expr: container_memory_usage_bytes / container_spec_memory_limit_bytes > 0.8
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High memory usage"
+      description: "Memory usage above 80%"
+
+  - alert: MinecraftDown
+    expr: kube_pod_status_ready == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Minecraft server unavailable"
+      description: "Pod not ready (player-visible outage)"
